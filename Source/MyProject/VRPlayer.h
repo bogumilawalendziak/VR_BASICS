@@ -17,16 +17,17 @@
 UCLASS()
 class MYPROJECT_API AVRPlayer : public ACharacter
 {
-	//GENERATED_BODY()
+	GENERATED_BODY()
 
-		/** Motion controller (right hand) */
+	
+public:
+	/** Motion controller (right hand) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 		UMotionControllerComponent* R_MotionController;
 
 	/** Motion controller (left hand) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 		UMotionControllerComponent* L_MotionController;
-public:
 	// Sets default values for this character's properties
 	AVRPlayer();
 
@@ -41,6 +42,13 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Components")
 		UPhysicsHandleComponent* PhysicsHandle;
+	UFUNCTION() // kolizja 
+		void OnBeginOverlap(class UPrimitiveComponent* HitComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp,
+			int32 OtherBodyIndex, bool bFrimSweep, const FHitResult& SweepResult);
+
+	UFUNCTION() // kolizja 
+		void OnEndOverlap(class UPrimitiveComponent* HitComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp,
+			int32 OtherBodyIndex, bool bFrimSweep, const FHitResult& SweepResult);
 
 protected:
 	// Called when the game starts or when spawned
@@ -74,9 +82,9 @@ public:
 	USkeletalMeshComponent* m_meshRightHand;
 
 	float Reach = 100.0f;
-
 	void Grab();
-
+	bool isGrabbing = false;
+	UPrimitiveComponent* holdingComponent;
 	
 	void Release();
 

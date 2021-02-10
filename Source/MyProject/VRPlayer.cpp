@@ -33,25 +33,28 @@ AVRPlayer::AVRPlayer()
 	L_MotionController->SetupAttachment(RootComponent);
 }
 
+
+
 // Called when the game starts or when spawned
 void AVRPlayer::BeginPlay()
 {
 	Super::BeginPlay();
+
 	CacheHandAnimInstances();
-	
+	GetCapsuleComponent()->OnComponentBeginOverlap.AddDynamic(this, &AVRPlayer::OnBeginOverlap);
 }
 
 // Called every frame
 void AVRPlayer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	FVector PlayerViewPointLocation = R_MotionController->GetComponentLocation();
+	//FVector zarcik =R_MotionController->GetComponentLocation();
+	FRotator PlayerViewPointRotation = R_MotionController->GetComponentRotation();
+	//GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint(
+	//	OUT PlayerViewPointLocation, OUT PlayerViewPointRotation);
 	
-	FVector PlayerViewPointLocation;
-	FRotator PlayerViewPointRotation;
-	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint(
-		OUT PlayerViewPointLocation, OUT PlayerViewPointRotation);
-	
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * 10.0f;
+	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * 40.0f;
 	if (PhysicsHandle->GrabbedComponent	) {
 		PhysicsHandle->SetTargetLocation(LineTraceEnd);
 	
@@ -77,7 +80,7 @@ void AVRPlayer::CreateComponents()
 {
 
 
-	GetCapsuleComponent()->InitCapsuleSize(150.f, 96.0f);
+	GetCapsuleComponent()->InitCapsuleSize(42.0f, 96.0f);
 
 	//Chaperone component that is required for Steam VR plugin
 	USteamVRChaperoneComponent* chaperone = CreateDefaultSubobject<USteamVRChaperoneComponent>(TEXT("SteamVR Chaperone"));
@@ -252,7 +255,6 @@ void AVRPlayer::MoveForward(float Axis)
 		if (Controller)
 		{
 		
-		
 			FRotator Rotation = GetBaseAimRotation();
 
 			Rotation.Normalize();
@@ -283,15 +285,21 @@ void AVRPlayer::Grab()
 	auto HitResult = GetFirstPhysicsBodyInReach();
 	auto ComponentToGrab = HitResult.GetComponent();
 	auto ActorHit = HitResult.GetActor();
+	FName SocketName = "socket";
 	//If we hit cometing then attach a physics handle
-	if (ActorHit != nullptr) {
+	/*if (ActorHit != nullptr) {
 		PhysicsHandle->GrabComponentAtLocationWithRotation(
 	
-			ComponentToGrab, NAME_None, ComponentToGrab->GetOwner()->GetActorLocation(),
-				
-			ComponentToGrab->GetComponentRotation()); // allow rotation
-
+			ComponentToGrab, NAME_None, ComponentToGrab->GetOwner()->GetActorLocation(),ComponentToGrab->GetComponentRotation()); 
+	}*/
+	if (ActorHit != nullptr && ActorHit->ActorHasTag("pickable")) {
+		isGrabbing = true;
+		holdingComponent = ComponentToGrab;
+		ComponentToGrab->SetSimulatePhysics(false);
+			ComponentToGrab->AttachToComponent(m_meshRightHand, FAttachmentTransformRules::KeepWorldTransform, SocketName);
+			UE_LOG(LogTemp, Error, TEXT("PickingUp"));
 	}
+
 	
 };
 
@@ -299,27 +307,57 @@ void AVRPlayer::Grab()
 void AVRPlayer::Release()
 {
 	UE_LOG(LogTemp, Error, TEXT("Grab released"));
+	/*if (PhysicsHandle->GrabbedComponent) {
+		PhysicsHandle->ReleaseComponent();
+	}*/
+
+	if (isGrabbing) {
+		holdingComponent->SetSimulatePhysics(true);
+		holdingComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		//holdingComponent->SetSimulatePhysics(true);
+	
+	}
 };
 
 const FHitResult AVRPlayer::GetFirstPhysicsBodyInReach() {
 	//Get the player viewpoint this tick
 
-	FVector PlayerViewPointLocation;
-	FRotator PlayerViewPointRotation;
+	//FVector PlayerViewPointLocation;
+	FRotator PlayerViewPointRotation = R_MotionController->GetComponentRotation();
+	FVector PlayerViewPointLocation = R_MotionController->GetComponentLocation();
+	//GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint(
+		//OUT PlayerViewPointLocation, OUT PlayerViewPointRotation);
 
-	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint(
-		OUT PlayerViewPointLocation, OUT PlayerViewPointRotation);
-
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
+	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * 100.0f;
 	
 	FCollisionQueryParams TraceParameters(FName(TEXT("")), false, GetOwner());
-	
+	TArray<TEnumAsByte<EObjectTypeQuery>> TraceObjectTypes;
+
+	TraceObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn));
+	TraceObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_PhysicsBody));
 	FHitResult Hit;
-	GetWorld()->LineTraceSingleByObjectType(OUT Hit, PlayerViewPointLocation, LineTraceEnd, FCollisionObjectQueryParams(ECollisionChannel::ECC_PhysicsBody),
-		TraceParameters);
+	//GetWorld()->LineTraceSingleByObjectType(OUT Hit, PlayerViewPointLocation, LineTraceEnd, FCollisionObjectQueryParams(ECollisionChannel::ECC_PhysicsBody),
+	//	TraceParameters);
+	GetWorld()->LineTraceSingleByObjectType(OUT Hit, PlayerViewPointLocation, LineTraceEnd, TraceObjectTypes,
+	TraceParameters);
 	AActor* ActorHit = Hit.GetActor();
+	
 	if (ActorHit) {
 		UE_LOG(LogTemp, Error, TEXT("Grab pressed %s"),(*ActorHit->GetName()));
 	}
 	return Hit;
 };
+void AVRPlayer::OnBeginOverlap(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFrimSweep, const FHitResult& SweepResult)
+{
+	//if (OtherActor->ActorHasTag("pickable") && isGrabbing) {
+	//	HitComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	//}
+}
+void AVRPlayer::OnEndOverlap(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFrimSweep, const FHitResult& SweepResult)
+{
+	/*if (OtherActor->ActorHasTag("pickable") && isGrabbing) {
+		HitComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	
+	}*/
+}
